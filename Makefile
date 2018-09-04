@@ -22,6 +22,8 @@
 #   - setup-worker:   Setup the host as a worker node, install pkg and download docker images
 #   - start:          Start the cello service
 #   - stop:           Stop the cello service, and remove all service containers
+#   - start-nfs:      Start the cello nfs service
+#   - stop-nfs:       Stop the cello nfs service
 
 GREEN  := $(shell tput -Txterm setaf 2)
 WHITE  := $(shell tput -Txterm setaf 7)
@@ -38,9 +40,9 @@ BASENAME ?= $(DOCKER_NS)/cello
 VERSION ?= 0.9.0
 IS_RELEASE=false
 
-DOCKER_BASE_x86_64=ubuntu:xenial
-DOCKER_BASE_ppc64le=ppc64le/ubuntu:xenial
-DOCKER_BASE_s390x=s390x/debian:jessie
+DOCKER_BASE_x86_64=python:3.6
+DOCKER_BASE_ppc64le=ppc64le/python:3.6
+DOCKER_BASE_s390x=s390x/python:3.6
 DOCKER_BASE=$(DOCKER_BASE_$(ARCH))
 BASE_VERSION ?= $(ARCH)-$(VERSION)
 
@@ -52,7 +54,7 @@ else
 endif
 
 # Docker images needed to run cello services
-DOCKER_IMAGES = baseimage mongo engine operator-dashboard ansible-agent watchdog user-dashboard fabric-initial
+DOCKER_IMAGES = baseimage mongo engine operator-dashboard ansible-agent watchdog user-dashboard
 DUMMY = .$(IMG_TAG)
 
 ifeq ($(DOCKER_BASE), )
@@ -105,9 +107,9 @@ WORKER_TYPE ?= docker
 # Specify the running mode, prod or dev
 MODE ?= prod
 ifeq ($(MODE),prod)
-	COMPOSE_FILE=docker-compose.yml
+	COMPOSE_FILE=docker-compose-files/docker-compose.yml
 else
-	COMPOSE_FILE=docker-compose-dev.yml
+	COMPOSE_FILE=docker-compose-files/docker-compose-dev.yml
 endif
 
 
@@ -150,7 +152,7 @@ docker-operator-dashboard: build/docker/operator-dashboard/$(DUMMY)
 
 docker-clean: stop image-clean ##@Clean all existing images
 
-DOCKERHUB_IMAGES = baseimage engine operator-dashboard user-dashboard watchdog ansible-agent fabric-initial
+DOCKERHUB_IMAGES = baseimage engine operator-dashboard user-dashboard watchdog ansible-agent
 
 dockerhub: $(patsubst %,dockerhub-%,$(DOCKERHUB_IMAGES))  ##@Building latest images with dockerhub materials, to valid them
 
@@ -172,7 +174,7 @@ license:
 install: $(patsubst %,build/docker/%/.push,$(DOCKER_IMAGES))
 
 check-js: ##@Code Check check js code format
-	docker-compose -f docker-compose-check-js.yaml up
+	docker-compose -f docker-compose-files/docker-compose-check-js.yaml up
 
 check: setup-master docker-operator-dashboard ##@Code Check code format
 	@$(MAKE) license
@@ -221,6 +223,7 @@ start: ##@Service Start service
 	fi
 	docker-compose -f ${COMPOSE_FILE} up -d --no-recreate
 	echo "Now you can visit operator-dashboard at localhost:8080, or user-dashboard at localhost:8081"
+	@$(MAKE) start-nfs
 
 stop: ##@Service Stop service
 	echo "Stop all services with ${COMPOSE_FILE}..."
@@ -252,6 +255,12 @@ npm-install: ##@Nodejs Install modules with npm package management
 
 help: ##@other Show this help.
 	@perl -e '$(HELP_FUN)' $(MAKEFILE_LIST)
+
+start-nfs: ##@Service start nfs service
+	docker-compose -f docker-compose-files/docker-compose-nfs.yml up -d --no-recreate
+
+stop-nfs: ##@Service stop nfs service
+	docker-compose -f docker-compose-files/docker-compose-nfs.yml down
 
 HELP_FUN = \
 	%help; \
